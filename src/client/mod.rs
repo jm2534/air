@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use crate::{Message, Provider};
 
 #[derive(Default)]
@@ -9,15 +11,23 @@ pub struct ClientConfig {
 
 pub struct Client {
     pub context: Vec<Message>,
+    pub tokens_sent: Option<u64>,
     provider: Box<dyn Provider>,
     config: ClientConfig,
     http_client: reqwest::blocking::Client,
+}
+
+impl Display for Client {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.provider)
+    }
 }
 
 impl Client {
     /// Create a new client with the given model provider
     pub fn new<P: Provider + 'static>(provider: P) -> Self {
         Self {
+            tokens_sent: Some(0),
             context: Vec::new(),
             provider: Box::new(provider),
             config: ClientConfig::default(),
@@ -37,8 +47,14 @@ impl Client {
     pub fn send(&mut self, content: String) -> anyhow::Result<&str> {
         let message = Message::user(content);
         self.context.push(message);
-        let response = self.provider.send(&self.context, &self.http_client)?;
-        self.context.push(response);
+        let (message, usage) = self.provider.send(&self.context, &self.http_client)?;
+
+        self.context.push(message);
+        self.tokens_sent = match (usage.total_tokens, self.tokens_sent) {
+            (_, None) | (None, Some(_)) => None,
+            (Some(x), Some(y)) => Some(x + y),
+        };
+
         Ok(&self.context.last().unwrap().content)
     }
 }

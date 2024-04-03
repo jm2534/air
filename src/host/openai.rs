@@ -1,7 +1,10 @@
-use crate::{Message, Provider};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Display};
 
+use super::Usage;
+use crate::{Message, Provider};
+
+/// A provider that sends messages to the OpenAI API.
 pub struct OpenAI {
     name: String,
     key: String,
@@ -12,6 +15,12 @@ impl OpenAI {
 
     pub fn new(name: String, key: String) -> Self {
         Self { name, key }
+    }
+}
+
+impl Display for OpenAI {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "OpenAI {}", self.name)
     }
 }
 
@@ -29,7 +38,7 @@ struct OpenAIResponse {
     created: u64,
     model: String,
     choices: Vec<ResponseChoice>,
-    usage: HashMap<String, u64>,
+    usage: Usage,
 }
 
 impl Provider for OpenAI {
@@ -37,7 +46,7 @@ impl Provider for OpenAI {
         &self,
         context: &[Message],
         client: &reqwest::blocking::Client,
-    ) -> Result<Message, reqwest::Error> {
+    ) -> Result<(Message, Usage), reqwest::Error> {
         let payload = serde_json::json!({
             "model": self.name,
             "messages": context,
@@ -54,6 +63,6 @@ impl Provider for OpenAI {
             None => "<Empty response from server>",
         };
 
-        Ok(Message::assistant(text.to_string()))
+        Ok((Message::assistant(text.to_string()), response.usage))
     }
 }

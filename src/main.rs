@@ -1,11 +1,13 @@
-use ai_cli::client::Client;
-use ai_cli::host::{Custom, OpenAI};
+use airs::client::Client;
+use airs::host::{Custom, OpenAI};
 use anyhow::Result;
 use clap::Parser;
 use dotenvy::dotenv;
 use std::io::{stdout, Write};
+use std::str::FromStr;
 use std::thread::sleep;
 use std::time::Duration;
+use url::Url;
 
 use rustyline::{error::ReadlineError, DefaultEditor};
 use serde::Serialize;
@@ -38,23 +40,28 @@ fn main() -> Result<()> {
     let args = Args::parse();
     let mut client = match args.host {
         Host::OpenAI => {
-            let key = std::env::var("API_KEY")?;
-            let name = args.name.unwrap_or("gpt-3.5-turbo".to_string());
+            let key = std::env::var("API_KEY")
+                .expect("You must set the environment variable `API_KEY` your to OpenAI API key");
+            let name = args.name.clone().unwrap_or("gpt-3.5-turbo".to_string());
             let provider = OpenAI::new(name, key);
             Client::new(provider)
         }
         Host::Custom => {
-            let provider = Custom::new("localhost:8000".into());
+            let provider = Custom::new(Url::from_str("localhost:8000")?);
             Client::new(provider)
         }
     };
 
+    // header
     const VERSION: &str = env!("CARGO_PKG_VERSION");
-    println!("ai-cli v{VERSION}");
+    println!(
+        "{} {} (airs v{VERSION})",
+        client,
+        &args.name.clone().unwrap_or("".to_string())
+    );
 
     let mut rl = DefaultEditor::new()?;
     let mut response: &str;
-
     loop {
         let readline = rl.readline(">> ");
         match readline {
@@ -71,6 +78,7 @@ fn main() -> Result<()> {
             }
         }
 
+        // ChatGPT-style rolling output
         let mut stdout = stdout().lock();
         for word in response.split_whitespace() {
             write!(stdout, "{} ", word)?;
