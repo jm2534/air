@@ -43,13 +43,13 @@ struct Args {
 
     #[clap(short, long, default_value = None)]
     /// Location to load transcript for context initialization
-    file: Option<PathBuf>,
+    input: Option<PathBuf>,
 }
 
 fn main() -> Result<()> {
     dotenv()?;
     let args = Args::parse();
-    let context = match args.file {
+    let context = match args.input {
         None => Vec::new(),
         Some(path) => {
             let file = File::open(path)?;

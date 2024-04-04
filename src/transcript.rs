@@ -3,6 +3,7 @@ use anyhow::Result;
 use enum_iterator::all;
 use regex::Regex;
 use std::{
+    mem,
     io::{BufRead, Read, Write},
     str::FromStr,
 };
@@ -33,18 +34,13 @@ pub fn load(source: impl Read) -> Result<Vec<Message>> {
     while let Ok(n) = reader.read_line(&mut buffer) {
         if n == 0 {
             // EOF; save final message
-            let message = Message {
-                role,
-                content: buffer.trim_end().to_string(),
-            };
+            let message = Message::new(role, buffer.trim_end());
             messages.push(message);
             break;
         } else if let Some(r) = re.find_at(&buffer, buffer.len() - n) {
             // Found new role: save current message up to role and create new one
-            let message = Message {
-                role,
-                content: buffer[..buffer.len() - n].trim_end().to_string(),
-            };
+            let content = buffer[..buffer.len() - n].trim_end();
+            let message = Message::new(role, content);
             messages.push(message);
 
             // Prepare next message's role and its buffer
@@ -72,9 +68,9 @@ impl<'a, T: Write> Transcript<'a, T> {
         Ok(Self { sink })
     }
 
+    /// Record a message to the transcript if a sink was provided on `Transcript`
+    /// creation.
     pub fn record(&mut self, message: &Message) -> Result<()> {
-        // Log to file if specified
-        // if let Some(&mut ref mut s) = self.sink {
         if let Some(&mut ref mut s) = self.sink{ 
             writeln!(s, "{}:", message.role.to_string().to_uppercase())?;
             for line in message.content.lines() {

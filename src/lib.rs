@@ -53,28 +53,31 @@ pub struct Message {
 }
 
 impl Message {
-    pub fn new(role: Role, content: String) -> Self {
-        Self { role, content }
+    pub fn new<S: Into<String>>(role: Role, content: S) -> Self {
+        Self {
+            role,
+            content: content.into(),
+        }
     }
 
-    pub fn user(content: String) -> Self {
+    pub fn user<S: Into<String>>(content: S) -> Self {
         Self {
             role: Role::User,
-            content,
+            content: content.into(),
         }
     }
 
-    pub fn system(content: String) -> Self {
+    pub fn system<S: Into<String>>(content: S) -> Self {
         Self {
             role: Role::System,
-            content,
+            content: content.into(),
         }
     }
 
-    pub fn assistant(content: String) -> Self {
+    pub fn assistant<S: Into<String>>(content: S) -> Self {
         Self {
             role: Role::Assistant,
-            content,
+            content: content.into(),
         }
     }
 }

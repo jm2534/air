@@ -6,9 +6,24 @@ use crate::{Message, Provider};
 pub struct ClientConfig {
     model_name: Option<String>,
     max_tokens: Option<usize>,
-    context: String,
 }
 
+/// A client for interacting with a model provider. `Client`s maintain a context
+/// for each conversation, sending messages to the provider for processing. See
+/// the `Provider` trait for more information on implementing a model provider.
+///
+/// # Examples
+///
+/// ```
+/// use air::client::Client;
+/// use air::Message;
+/// use air::host::OpenAI;
+///
+/// let model = OpenAI::new("gpt-3.5-turbo", "my-api-key");
+/// let mut client = Client::new(model);
+/// let message = Message::user("What is the meaning of life?");
+/// let answer = client.send(message);
+/// ```
 pub struct Client {
     pub context: Vec<Message>,
     pub tokens_sent: Option<u64>,
@@ -40,8 +55,9 @@ impl Client {
         self
     }
 
-    pub fn with(self, config: ClientConfig) -> Self {
-        Self { config, ..self }
+    pub fn with(mut self, config: ClientConfig) -> Self {
+        self.config = config;
+        self
     }
 
     pub fn clear(&mut self) {
@@ -59,7 +75,7 @@ impl Client {
             (Some(x), Some(y)) => Some(x + y),
         };
 
-        let model_response = &self.context.last().unwrap();
+        let model_response = self.context.last().unwrap();
         Ok(model_response)
     }
 }

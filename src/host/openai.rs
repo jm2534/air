@@ -13,8 +13,11 @@ pub struct OpenAI {
 impl OpenAI {
     const BASE_URL: &'static str = "https://api.openai.com/v1/chat/completions";
 
-    pub fn new(name: String, key: String) -> Self {
-        Self { name, key }
+    pub fn new<S: Into<String>>(name: S, key: S) -> Self {
+        Self {
+            name: name.into(),
+            key: key.into(),
+        }
     }
 }
 
