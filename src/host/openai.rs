@@ -32,11 +32,12 @@ struct ResponseChoice {
     logprobs: Option<serde_json::Value>,
 }
 
+/// Response from the OpenAI API for (de)serialization purposes.
 #[derive(Deserialize, Serialize)]
 struct OpenAIResponse {
-    id: String,
-    created: u64,
-    model: String,
+    id: Option<String>,
+    created: Option<u64>,
+    model: Option<String>,
     choices: Vec<ResponseChoice>,
     usage: Usage,
 }

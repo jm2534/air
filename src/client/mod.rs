@@ -35,6 +35,11 @@ impl Client {
         }
     }
 
+    pub fn with_context(mut self, context: Vec<Message>) -> Self {
+        self.context = context;
+        self
+    }
+
     pub fn with(self, config: ClientConfig) -> Self {
         Self { config, ..self }
     }
@@ -44,9 +49,8 @@ impl Client {
     }
 
     /// Send a message to the model alongside the existing context
-    pub fn send(&mut self, content: String) -> anyhow::Result<&str> {
-        let message = Message::user(content);
-        self.context.push(message);
+    pub fn send(&mut self, content: Message) -> anyhow::Result<&Message> {
+        self.context.push(content);
         let (message, usage) = self.provider.send(&self.context, &self.http_client)?;
 
         self.context.push(message);
@@ -55,7 +59,8 @@ impl Client {
             (Some(x), Some(y)) => Some(x + y),
         };
 
-        Ok(&self.context.last().unwrap().content)
+        let model_response = &self.context.last().unwrap();
+        Ok(model_response)
     }
 }
 

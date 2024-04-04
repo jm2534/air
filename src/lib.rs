@@ -1,13 +1,15 @@
-use std::fmt::Display;
+use std::{fmt::Display, str::FromStr};
 
+use enum_iterator::Sequence;
 use host::Usage;
 use reqwest::blocking;
 use serde::{Deserialize, Serialize};
 
 pub mod client;
 pub mod host;
+pub mod transcript;
 
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, Sequence)]
 #[serde(rename_all = "lowercase")]
 /// OpenAI-based roles for identifying message authors in a conversation
 pub enum Role {
@@ -19,6 +21,29 @@ pub enum Role {
 
     /// A response from the model
     Assistant,
+}
+
+impl FromStr for Role {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "system" => Ok(Role::System),
+            "user" => Ok(Role::User),
+            "assistant" => Ok(Role::Assistant),
+            _ => Err(s.to_owned()),
+        }
+    }
+}
+
+impl Display for Role {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Role::System => write!(f, "System"),
+            Role::User => write!(f, "User"),
+            Role::Assistant => write!(f, "Assistant"),
+        }
+    }
 }
 
 #[derive(Clone, Serialize, Deserialize, Debug)]
