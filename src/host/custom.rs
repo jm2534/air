@@ -2,7 +2,7 @@ use std::fmt::Display;
 use url::Url;
 
 use super::Usage;
-use crate::{Message, Provider};
+use crate::{Message, Provider, ProviderError};
 
 /// A custom provider that sends messages to a prescribed HTTP endpoint.
 pub struct Custom {
@@ -30,7 +30,7 @@ impl Provider for Custom {
         &self,
         context: &[Message],
         client: &reqwest::blocking::Client,
-    ) -> Result<(Message, Usage), reqwest::Error> {
+    ) -> Result<(Message, Usage), ProviderError> {
         let response = client.post(self.url.as_str()).json(context).send()?;
         Ok((Message::assistant(response.text()?), Usage::new()))
     }

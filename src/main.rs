@@ -47,7 +47,10 @@ struct Args {
 }
 
 fn main() -> Result<()> {
-    dotenv()?;
+    if dotenv().is_ok() {
+        println!("Loaded .env file");
+    };
+
     let args = Args::parse();
     let context = match args.input {
         None => Vec::new(),

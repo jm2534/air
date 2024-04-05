@@ -3,7 +3,6 @@ use anyhow::Result;
 use enum_iterator::all;
 use regex::Regex;
 use std::{
-    mem,
     io::{BufRead, Read, Write},
     str::FromStr,
 };
@@ -71,7 +70,7 @@ impl<'a, T: Write> Transcript<'a, T> {
     /// Record a message to the transcript if a sink was provided on `Transcript`
     /// creation.
     pub fn record(&mut self, message: &Message) -> Result<()> {
-        if let Some(&mut ref mut s) = self.sink{ 
+        if let Some(&mut ref mut s) = self.sink { 
             writeln!(s, "{}:", message.role.to_string().to_uppercase())?;
             for line in message.content.lines() {
                 writeln!(s, "{line}")?;

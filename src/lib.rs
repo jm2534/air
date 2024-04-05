@@ -1,4 +1,4 @@
-use std::{fmt::Display, str::FromStr};
+use std::{collections::HashMap, fmt::Display, str::FromStr};
 
 use enum_iterator::Sequence;
 use host::Usage;
@@ -82,14 +82,67 @@ impl Message {
     }
 }
 
+#[derive(Deserialize, Serialize)]
+pub struct ModelOutput {
+    index: usize,
+    message: HashMap<String, String>,
+    finish_reason: String,
+    logprobs: Option<serde_json::Value>,
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct ProviderResponse {
+    choices: Vec<ModelOutput>,
+    usage: Usage,
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum ProviderError {
+    #[error("Failed to submit request to the server: HTTP error {0}")]
+    HttpError(reqwest::StatusCode),
+
+    #[error("Failed to parse server response: {0}")]
+    ParsingError(#[from] serde_json::Error),
+
+    #[error("No response from the server despite successful request")]
+    EmptyResponse,
+
+    #[error("An unknown error occurred")]
+    UnknownError,
+}
+
+impl From<reqwest::Error> for ProviderError {
+    fn from(value: reqwest::Error) -> Self {
+        match value.status() {
+            Some(status) => ProviderError::HttpError(status),
+            None => ProviderError::UnknownError,
+        }
+    }
+}
+
 pub trait Provider: Display {
+    /// Helper method for `send` implementers to extract the relevant details
+    /// from a provider's deserialized response object.
+    fn parse(&self, mut response: ProviderResponse) -> Result<(Message, Usage), ProviderError> {
+        match response.choices.first_mut() {
+            None => Err(ProviderError::EmptyResponse),
+            Some(choice) => {
+                // avoiding a needless copy of what may be a large response
+                match choice.message.remove("content") {
+                    None => Err(ProviderError::EmptyResponse),
+                    Some(text) => Ok((Message::assistant(text), response.usage)),
+                }
+            }
+        }
+    }
+
     /// Send a message and accompanying context to the model using the provided
     /// HTTP client, returning the response message and usage statistics.
     fn send(
         &self,
         context: &[Message],
         client: &blocking::Client,
-    ) -> Result<(Message, Usage), reqwest::Error>;
+    ) -> Result<(Message, Usage), ProviderError>;
 }
 
 #[cfg(test)]

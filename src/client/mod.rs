@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-use crate::{Message, Provider};
+use crate::{Message, Provider, ProviderError};
 
 #[derive(Default)]
 pub struct ClientConfig {
@@ -65,7 +65,7 @@ impl Client {
     }
 
     /// Send a message to the model alongside the existing context
-    pub fn send(&mut self, content: Message) -> anyhow::Result<&Message> {
+    pub fn send(&mut self, content: Message) -> Result<&Message, ProviderError> {
         self.context.push(content);
         let (message, usage) = self.provider.send(&self.context, &self.http_client)?;
 
@@ -92,5 +92,20 @@ mod tests {
         let key = String::from("api-key");
         let client = Client::new(OpenAI::new(name, key));
         assert!(client.context.is_empty());
+    }
+
+    #[test]
+    fn test_client_bad_api_key() {
+        let name = String::from("gpt-3.5-turbo");
+        let key = String::from("api-key");
+        let mut client = Client::new(OpenAI::new(name, key));
+
+        let message = Message::user("Hello, world!");
+        let response = client.send(message);
+        assert!(response.is_err());
+        match response {
+            Err(ProviderError::HttpError(code)) => assert_eq!(code, 401),
+            _ => panic!("Expected 401 Unauthorized error"),
+        };
     }
 }
