@@ -57,14 +57,14 @@ pub struct Transcript<'a, T: Write> {
 }
 
 impl<'a, T: Write> Transcript<'a, T> {
-    pub fn new(sink: &'a mut T) -> Result<Self> {
-        Ok(Self { sink: Some(sink) })
+    pub fn new(sink: &'a mut T) -> Self {
+        Self { sink: Some(sink) }
     }
 
     /// Create a new `Transcript` with an optional sink. If `None`, the sink
     /// is never written to.
-    pub fn conditionally(sink: Option<&'a mut T>) -> Result<Self> {
-        Ok(Self { sink })
+    pub fn conditionally(sink: Option<&'a mut T>) -> Self {
+        Self { sink }
     }
 
     /// Record a message to the transcript if a sink was provided on `Transcript`
@@ -103,7 +103,7 @@ mod tests {
     fn test_transcript_single_format() -> Result<()> {
         let buffer = Vec::<u8>::new();
         let mut sink = Cursor::new(buffer);
-        let mut transcript = Transcript::conditionally(Some(&mut sink))?;
+        let mut transcript = Transcript::conditionally(Some(&mut sink));
 
         let message = Message {
             role: Role::User,
@@ -124,7 +124,7 @@ mod tests {
     fn test_transcript_interleaved() -> Result<()> {
         let buffer = Vec::<u8>::new();
         let mut sink = Cursor::new(buffer);
-        let mut transcript = Transcript::conditionally(Some(&mut sink))?;
+        let mut transcript = Transcript::conditionally(Some(&mut sink));
 
         let messages = vec![
             Message {
@@ -158,7 +158,7 @@ mod tests {
     fn test_load() -> Result<()> {
         let buffer = Vec::<u8>::new();
         let mut sink = std::io::Cursor::new(buffer);
-        let mut transcript = Transcript::new(&mut sink)?;
+        let mut transcript = Transcript::new(&mut sink);
 
         let messages = vec![
             Message {

@@ -1,5 +1,7 @@
 use super::Usage;
 use crate::{Message, Provider, ProviderError, ProviderResponse};
+
+use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
 /// A provider that sends messages to the OpenAI API.
@@ -9,7 +11,7 @@ pub struct OpenAI {
 }
 
 impl OpenAI {
-    const BASE_URL: &'static str = "https://api.openai.com/v1/chat/completions";
+    const BASE_URL: &'static str = "https://api.openai.com/v1";
 
     pub fn new<S: Into<String>>(name: S, key: S) -> Self {
         Self {
@@ -25,6 +27,24 @@ impl Display for OpenAI {
     }
 }
 
+#[derive(Deserialize, Serialize)]
+struct ModelEndpointResponse {
+    object: String,
+    data: Vec<ModelEndpointEntity>,
+}
+
+#[derive(Deserialize, Serialize)]
+struct ModelEndpointEntity {
+    // Entity name
+    id: String,
+
+    // Entity description; should be `model` for models
+    object: String,
+
+    // Entity owner; should be `openai` for OpenAI models
+    owned_by: String,
+}
+
 impl Provider for OpenAI {
     fn send(
         &self,
@@ -37,7 +57,7 @@ impl Provider for OpenAI {
         });
 
         let response = client
-            .post(Self::BASE_URL)
+            .post(format!("{}/chat/completions", Self::BASE_URL))
             .json(&payload)
             .bearer_auth(&self.key)
             .send()?
@@ -45,5 +65,28 @@ impl Provider for OpenAI {
             .json::<ProviderResponse>()?;
 
         self.parse(response)
+    }
+
+    fn models(&self, client: &reqwest::blocking::Client) -> Result<Vec<String>, ProviderError> {
+        let response = client
+            .post(format!("{}/models", Self::BASE_URL))
+            .bearer_auth(&self.key)
+            .send()?
+            .error_for_status()?
+            .json::<ModelEndpointResponse>()?;
+
+        let data = response
+            .data
+            .into_iter()
+            .filter_map(|data| {
+                if data.owned_by == "openai" && data.object == "model" {
+                    Some(data.id)
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        Ok(data)
     }
 }

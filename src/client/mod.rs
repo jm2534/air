@@ -4,8 +4,9 @@ use crate::{Message, Provider, ProviderError};
 
 #[derive(Default)]
 pub struct ClientConfig {
-    model_name: Option<String>,
-    max_tokens: Option<usize>,
+    pub model_name: Option<String>,
+    pub max_tokens: Option<usize>,
+    pub verbose: bool,
 }
 
 /// A client for interacting with a model provider. `Client`s maintain a context
@@ -48,6 +49,11 @@ impl Client {
             config: ClientConfig::default(),
             http_client: reqwest::blocking::Client::new(),
         }
+    }
+
+    pub fn config(mut self, config: ClientConfig) -> Self {
+        self.config = config;
+        self
     }
 
     pub fn with_context(mut self, context: Vec<Message>) -> Self {

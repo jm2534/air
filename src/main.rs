@@ -1,4 +1,4 @@
-use air::client::Client;
+use air::client::{Client, ClientConfig};
 use air::host::{Custom, OpenAI};
 use air::transcript::{load, Transcript};
 use air::Message;
@@ -7,6 +7,7 @@ use clap::Parser;
 use dotenvy::dotenv;
 use rustyline::{error::ReadlineError, DefaultEditor};
 use serde::Serialize;
+use std::convert::From;
 use std::fs::File;
 use std::io::{stdout, LineWriter, Write};
 use std::path::PathBuf;
@@ -23,7 +24,7 @@ pub enum Host {
     OpenAI,
 }
 
-#[derive(Parser, Debug)]
+#[derive(Parser, Debug, Default, Clone)]
 struct Args {
     /// Host for the model
     #[clap(long, value_enum, default_value_t = Host::OpenAI)]
@@ -44,6 +45,20 @@ struct Args {
     #[clap(short, long, default_value = None)]
     /// Location to load transcript for context initialization
     input: Option<PathBuf>,
+
+    #[clap(short, long, default_value_t = false)]
+    /// Verbose output
+    verbose: bool,
+}
+
+impl From<Args> for ClientConfig {
+    fn from(value: Args) -> Self {
+        Self {
+            max_tokens: value.max_tokens,
+            verbose: value.verbose,
+            ..Default::default()
+        }
+    }
 }
 
 fn main() -> Result<()> {
@@ -54,7 +69,7 @@ fn main() -> Result<()> {
     let args = Args::parse();
     let context = match args.input {
         None => Vec::new(),
-        Some(path) => {
+        Some(ref path) => {
             let file = File::open(path)?;
             load(file)?
         }
@@ -66,21 +81,18 @@ fn main() -> Result<()> {
                 .expect("You must set the environment variable `API_KEY` to your OpenAI API key");
             let name = args.name.clone().unwrap_or("gpt-3.5-turbo".to_string());
             let provider = OpenAI::new(name, key);
-            Client::new(provider).with_context(context)
+            Client::new(provider)
         }
         Host::Custom => {
             let provider = Custom::new(Url::from_str("localhost:8000")?);
-            Client::new(provider).with_context(context)
+            Client::new(provider)
         }
     };
+    client = client.config(args.clone().into()).with_context(context);
 
     // header
     const VERSION: &str = env!("CARGO_PKG_VERSION");
-    println!(
-        "{} {} (air v{VERSION})",
-        client,
-        &args.name.clone().unwrap_or("".to_string())
-    );
+    println!("{} (air v{VERSION})", client);
 
     // setup transcript to record on calls to `record` if output is provided
     let mut writer: Option<LineWriter<_>> = args
@@ -88,7 +100,7 @@ fn main() -> Result<()> {
         .map(File::create)
         .transpose()?
         .map(LineWriter::new);
-    let mut transcript = Transcript::conditionally(writer.as_mut())?;
+    let mut transcript = Transcript::conditionally(writer.as_mut());
 
     // REPL
     let mut response: &Message;

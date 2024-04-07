@@ -34,4 +34,8 @@ impl Provider for Custom {
         let response = client.post(self.url.as_str()).json(context).send()?;
         Ok((Message::assistant(response.text()?), Usage::new()))
     }
+
+    fn models(&self, _client: &reqwest::blocking::Client) -> Result<Vec<String>, ProviderError> {
+        todo!("Implement this method")
+    }
 }

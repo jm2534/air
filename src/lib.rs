@@ -52,6 +52,20 @@ pub struct Message {
     pub content: String,
 }
 
+/// Generate `Message` constructors named for each provided role.
+macro_rules! expand_roles {
+    ($($var:ident),*) => {
+        $(
+            pub fn $var<S: Into<String>>(content: S) -> Self {
+                Self {
+                    role: Role::from_str(stringify!($var)).unwrap(),
+                    content: content.into(),
+                }
+            }
+        )*
+    };
+}
+
 impl Message {
     pub fn new<S: Into<String>>(role: Role, content: S) -> Self {
         Self {
@@ -60,26 +74,7 @@ impl Message {
         }
     }
 
-    pub fn user<S: Into<String>>(content: S) -> Self {
-        Self {
-            role: Role::User,
-            content: content.into(),
-        }
-    }
-
-    pub fn system<S: Into<String>>(content: S) -> Self {
-        Self {
-            role: Role::System,
-            content: content.into(),
-        }
-    }
-
-    pub fn assistant<S: Into<String>>(content: S) -> Self {
-        Self {
-            role: Role::Assistant,
-            content: content.into(),
-        }
-    }
+    expand_roles!(system, user, assistant);
 }
 
 #[derive(Deserialize, Serialize)]
@@ -135,6 +130,9 @@ pub trait Provider: Display {
             }
         }
     }
+
+    /// A list of valid model names for the provider.
+    fn models(&self, client: &reqwest::blocking::Client) -> Result<Vec<String>, ProviderError>;
 
     /// Send a message and accompanying context to the model using the provided
     /// HTTP client, returning the response message and usage statistics.
