@@ -24,8 +24,17 @@ pub fn load(source: impl Read) -> Result<Vec<Message>> {
     let mut role: Role;
     let mut buffer = String::with_capacity(1024);
     match reader.read_line(&mut buffer)? {
-        0 => return Ok(messages),
-        _ => role = Role::from_str(buffer.trim_end_matches(&[':', '\n'])).expect("Invalid start"),
+        0 => return Ok(messages), // Empty file
+        _ => match Role::from_str(buffer.trim_end_matches(&[':', '\n'])) {
+            Ok(r) => role = r, // First role found
+            Err(_) => {
+                // Not a transcript file: return the entire thing as user context
+                reader.read_to_string(&mut buffer).expect("Unable to read input context");
+                let message = Message::new(Role::User, buffer);
+                messages.push(message);
+                return Ok(messages);
+            }
+        }
     }
     buffer.clear();
 
@@ -155,7 +164,7 @@ mod tests {
     }
 
     #[test]
-    fn test_load() -> Result<()> {
+    fn test_load_simple() -> Result<()> {
         let buffer = Vec::<u8>::new();
         let mut sink = std::io::Cursor::new(buffer);
         let mut transcript = Transcript::new(&mut sink);
@@ -185,6 +194,26 @@ mod tests {
             assert_eq!(message.role, loaded.role);
             assert_eq!(message.content, loaded.content);
         }
+        Ok(())
+    }
+
+    #[test]
+    fn test_load_bad_format() -> Result<()> {
+        let buffer = Vec::<u8>::new();
+        let mut sink = std::io::Cursor::new(buffer);
+    
+        let content = r#"<Bad format>ASSISTANT:a\23""@#$!@#:\n\\1\r"#;
+        write!(sink, "{content}")?;
+        
+        let message = Message {
+            role: Role::User,
+            content: content.to_string(),
+        };
+
+        sink.rewind()?;
+        let loaded = load(sink)?;
+        assert_eq!(loaded.len(), 1);
+        assert_eq!(loaded[0], message);
         Ok(())
     }
 }

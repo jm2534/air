@@ -1,16 +1,25 @@
 [package]
 name = "air"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 license-file = "LICENSE.txt"
-keywords = ["gamedev", "graphics"]
 categories = ["command-line-utilities"]
+
+[lib]
+name = "air"
+path = "src/lib.rs"
+
+[[bin]]
+name = "air"
+path = "src/main.rs"
 
 [dependencies]
 anyhow = "1.0.81"
 clap = { version = "4.5.4", features = ["derive"] }
 dotenvy = "0.15.7"
 enum-iterator = "2.0.0"
+inquire = "0.7.4"
+keyring = "2.3.2"
 regex = "1.10.4"
 reqwest = { version = "0.12.2", features = ["blocking", "json"] }
 rustyline = "14.0.0"

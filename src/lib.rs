@@ -46,7 +46,7 @@ impl Display for Role {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize, Debug)]
+#[derive(Clone, Serialize, Deserialize, Debug, PartialEq, Eq)]
 pub struct Message {
     pub role: Role,
     pub content: String,

@@ -3,8 +3,9 @@ use air::host::{Custom, OpenAI};
 use air::transcript::{load, Transcript};
 use air::Message;
 use anyhow::Result;
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use dotenvy::dotenv;
+use inquire::{Password, Text};
 use rustyline::{error::ReadlineError, DefaultEditor};
 use serde::Serialize;
 use std::convert::From;
@@ -16,7 +17,10 @@ use std::thread::sleep;
 use std::time::Duration;
 use url::Url;
 
-#[derive(clap::ValueEnum, Clone, Serialize, Default, Debug)]
+mod profile;
+use profile::Profile;
+
+#[derive(clap::ValueEnum, Copy, Clone, Serialize, Default, Debug)]
 #[serde(rename_all = "kebab-case")]
 pub enum Host {
     #[default]
@@ -24,7 +28,9 @@ pub enum Host {
     OpenAI,
 }
 
-#[derive(Parser, Debug, Default, Clone)]
+#[derive(Parser, Default, Clone)]
+#[command(version, about, long_about = None)]
+#[command(propagate_version = true)]
 struct Args {
     /// Host for the model
     #[clap(long, value_enum, default_value_t = Host::OpenAI)]
@@ -49,6 +55,37 @@ struct Args {
     #[clap(short, long, default_value_t = false)]
     /// Verbose output
     verbose: bool,
+
+    #[clap(short, long, default_value = None)]
+    profile: Option<String>,
+
+    #[command(subcommand)]
+    command: Option<Command>,
+}
+
+#[derive(Clone, Debug, Subcommand)]
+enum ProfileCommands {
+    /// Add a new profile
+    Add { name: Option<String> },
+
+    /// Remove an existing profile
+    Remove { name: String },
+
+    /// List all profiles
+    List,
+}
+
+#[derive(Clone, clap::Args, Debug)]
+struct ProfileArgs {
+    /// Add a new profile
+    #[command(subcommand)]
+    command: ProfileCommands,
+}
+
+#[derive(Subcommand, Clone)]
+enum Command {
+    /// Manage profiles
+    Profile(ProfileArgs),
 }
 
 impl From<Args> for ClientConfig {
@@ -61,48 +98,16 @@ impl From<Args> for ClientConfig {
     }
 }
 
-fn main() -> Result<()> {
-    if dotenv().is_ok() {
-        println!("Loaded .env file");
-    };
-
-    let args = Args::parse();
-    let context = match args.input {
-        None => Vec::new(),
-        Some(ref path) => {
-            let file = File::open(path)?;
-            load(file)?
-        }
-    };
-
-    let mut client = match args.host {
-        Host::OpenAI => {
-            let key = std::env::var("API_KEY")
-                .expect("You must set the environment variable `API_KEY` to your OpenAI API key");
-            let name = args.name.clone().unwrap_or("gpt-3.5-turbo".to_string());
-            let provider = OpenAI::new(name, key);
-            Client::new(provider)
-        }
-        Host::Custom => {
-            let provider = Custom::new(Url::from_str("localhost:8000")?);
-            Client::new(provider)
-        }
-    };
-    client = client.config(args.clone().into()).with_context(context);
-
-    // header
+/// Main REPL for interacting with model providers.
+fn repl<T: Write>(
+    mut client: Client,
+    mut transcript: Transcript<T>,
+    profile: Profile,
+) -> Result<()> {
     const VERSION: &str = env!("CARGO_PKG_VERSION");
     println!("{} (air v{VERSION})", client);
+    println!("Using profile {}", profile.name);
 
-    // setup transcript to record on calls to `record` if output is provided
-    let mut writer: Option<LineWriter<_>> = args
-        .output
-        .map(File::create)
-        .transpose()?
-        .map(LineWriter::new);
-    let mut transcript = Transcript::conditionally(writer.as_mut());
-
-    // REPL
     let mut response: &Message;
     let mut rl = DefaultEditor::new()?;
     loop {
@@ -144,4 +149,90 @@ fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+fn main() -> Result<()> {
+    let args = Args::parse();
+
+    // handle profile commands
+    if let Some(Command::Profile(profile_args)) = args.command {
+        match profile_args.command {
+            ProfileCommands::Add { name } => {
+                let profile = Profile {
+                    name: name
+                        .unwrap_or_else(|| Text::new("Enter profile name: ").prompt().unwrap()),
+                    key: Password::new("Enter API key: ")
+                        .with_display_mode(inquire::PasswordDisplayMode::Masked)
+                        .without_confirmation()
+                        .prompt()?,
+                };
+                profile.save().expect("Failed to save profile");
+                println!("Created profile {}", profile.name);
+                return Ok(());
+            }
+            ProfileCommands::Remove { name } => {
+                let profile = Profile::load(name.clone())?;
+                profile.delete().expect("Failed to remove profile");
+                println!("Removed profile {}", name);
+                return Ok(());
+            }
+            ProfileCommands::List => {
+                let profiles = Profile::list().expect("Failed to list profiles");
+                for profile in profiles {
+                    println!("{}", profile.name);
+                }
+                return Ok(());
+            }
+        }
+    }
+
+    // otherwise load profile from args or environment
+    let profile = match args.profile {
+        None => {
+            if dotenv().is_ok() {
+                println!("Loaded .env file");
+            };
+            let key = std::env::var("API_KEY").expect(
+                "No credentials found. You must select an existing profile or set the environment variable `API_KEY`",
+                );
+            Profile {
+                name: "from environment".to_string(),
+                key,
+            }
+        }
+        Some(ref name) => Profile::load(name.clone())?,
+    };
+
+    let context = match args.input {
+        None => Vec::new(),
+        Some(ref path) => {
+            let file = File::open(path)?;
+            load(file)?
+        }
+    };
+
+    // create client based on args, key, context, etc.
+    let client = match args.host {
+        Host::OpenAI => {
+            let name = args.name.clone().unwrap_or("gpt-3.5-turbo".to_string());
+            let provider = OpenAI::new(name, profile.key.clone());
+            Client::new(provider)
+        }
+        Host::Custom => {
+            let provider = Custom::new(Url::from_str("localhost:8000")?);
+            Client::new(provider)
+        }
+    }
+    .with(args.clone().into())
+    .with_context(context);
+
+    // setup transcript to record on calls to `record` if output is provided
+    let mut writer: Option<LineWriter<_>> = args
+        .output
+        .map(File::create)
+        .transpose()?
+        .map(LineWriter::new);
+    let transcript = Transcript::conditionally(writer.as_mut());
+
+    repl(client, transcript, profile)
 }
